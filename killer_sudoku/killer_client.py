@@ -1,5 +1,5 @@
 from killer_sudoku import KillerSudoku
-from pulp_solver import KillerSudokuSolver
+from man_solver import KillerSudokuSolver
 import requests
 import re
 
@@ -28,15 +28,15 @@ class KillerCient:
 if __name__ == "__main__":
     client = KillerCient()
 
-    killer = client.get_killer_sudoku(19664)
+    killer = client.get_killer_sudoku(26274)
 
     print("Pulling Sudoku")
 
     killer_solver = KillerSudokuSolver(cage_constraints=killer.cages)
 
     print("Solving Sudoku")
-    solution = killer_solver.solve()
+    killer_solver.solve()
 
-    print("Solution found")
-    for row in solution:
-        print(row)
+    # print("Solution found")
+    # for row in solution:
+    #     print(row)
