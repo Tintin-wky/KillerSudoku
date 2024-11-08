@@ -28,7 +28,7 @@ class KillerCient:
 if __name__ == "__main__":
     client = KillerCient()
 
-    killer = client.get_killer_sudoku(26520)
+    killer = client.get_killer_sudoku(28358)
 
     print("Pulling Sudoku")
 

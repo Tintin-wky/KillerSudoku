@@ -1,7 +1,7 @@
-import sys
-import numpy as np
 import matplotlib.pyplot as plt
 from itertools import permutations
+
+
 def find_combinations(sum, count):
     results = set()
 
@@ -29,6 +29,7 @@ def find_impossible_numbers(possible_combinations):
         used_numbers.update(combination)
     impossible_numbers = all_numbers - used_numbers
     return impossible_numbers
+
 
 def get_cells_in_same_box(row, col):
     start_row = (row - 1) // 3 * 3 + 1
@@ -80,7 +81,8 @@ class Cage:
         else:
             self.cells = cells
         self.combinations = find_combinations(self.sum, len(self.cells))
-        self.number_dict = {i: self.cells for i in range(1,10)}
+        self.number_dict = {i: self.cells for i in range(1, 10)}
+        self.exact_number = set()
         self.update()
         self.solved = False
         # for cell in self.cells:
@@ -88,7 +90,7 @@ class Cage:
 
     def split(self, sum, cells):
         cage_constraint1 = [sum, [[cell.row - 1, cell.col - 1] for cell in cells]]
-        cage_constraint2 = [self.sum - sum, [[cell.row - 1, cell.col - 1] for cell in  self.cells - cells]]
+        cage_constraint2 = [self.sum - sum, [[cell.row - 1, cell.col - 1] for cell in self.cells - cells]]
         return Cage(cage_constraint1, cells), Cage(cage_constraint2, self.cells - cells)
 
     @classmethod
@@ -136,6 +138,10 @@ class Cage:
                     number_dict[number].update({cell})
         self.number_dict = number_dict
 
+        for number in range(1, 10):
+            if all(number in combination for combination in self.combinations):
+                self.exact_number.update({number})
+
     def __repr__(self):
         if self.solved:
             return f"Cage(ID={self.ID}, target_sum={self.sum}, cells={self.cells}, solution={self.combinations})"
@@ -144,14 +150,6 @@ class Cage:
 
 
 class KillerSudokuSolver:
-    """
-    Solve Killer Sudokus 
-
-    https://en.wikipedia.org/wiki/Killer_sudoku
-
-    Attributes:
-        solve (method): solves sudoku
-    """
     step = 0
 
     def __init__(self, cage_constraints):
@@ -174,7 +172,8 @@ class KillerSudokuSolver:
                 for candidate in cell.candidates:
                     candidate_counts[candidate].update({cell.col})
             for number in range(1, 10):
-                if len(candidate_counts[number]) == 1 and cell_dict.get((row, list(candidate_counts[number])[0])).solved is False:
+                if len(candidate_counts[number]) == 1 and cell_dict.get(
+                        (row, list(candidate_counts[number])[0])).solved is False:
                     self.set_number(row, list(candidate_counts[number])[0], number)
             for number in range(1, 10):
                 if len(candidate_counts[number]) != 1:
@@ -203,7 +202,8 @@ class KillerSudokuSolver:
                 for candidate in cell.candidates:
                     candidate_counts[candidate].update({cell.row})
             for number in range(1, 10):
-                if len(candidate_counts[number]) == 1 and cell_dict.get((list(candidate_counts[number])[0], col)).solved is False:
+                if len(candidate_counts[number]) == 1 and cell_dict.get(
+                        (list(candidate_counts[number])[0], col)).solved is False:
                     self.set_number(list(candidate_counts[number])[0], col, number)
             for number in range(1, 10):
                 if len(candidate_counts[number]) != 1:
@@ -240,7 +240,8 @@ class KillerSudokuSolver:
                 for number in range(1, 10):
                     if len(candidate_counts[number]) == 1 and cell_dict.get(
                             list(candidate_counts[number])[0]).solved is False:
-                        self.set_number(list(candidate_counts[number])[0][0], list(candidate_counts[number])[0][1], number)
+                        self.set_number(list(candidate_counts[number])[0][0], list(candidate_counts[number])[0][1],
+                                        number)
                 for number in range(1, 10):
                     if len(candidate_counts[number]) != 1:
                         cells = candidate_counts[number]
@@ -398,6 +399,28 @@ class KillerSudokuSolver:
             # 检查每个笼子是否仅一种可能
             if (not cage_.solved) and len(cage_.combinations) == 1:
                 cage_.solved = True
+            # 检查每个笼子是否有确定数字
+            if (not cage_.solved) and cage_.exact_number != set():
+                for number in cage_.exact_number:
+                    rows = [cell.row for cell in cage_.number_dict[number]]
+                    cols = [cell.col for cell in cage_.number_dict[number]]
+                    same_row = all(row == rows[0] for row in rows)
+                    same_col = all(col == cols[0] for col in cols)
+                    box_identifiers = {(row - 1) // 3 * 3 + (col - 1) // 3 for row, col in zip(rows, cols)}
+                    same_box = len(box_identifiers) == 1
+                    if same_row:
+                        for cell in [cell_dict.get((rows[0], col)) for col in range(1, 10)]:
+                            if cell not in cage_.cells:
+                                cell.exclude({number})
+                    if same_col:
+                        for cell in [cell_dict.get((row, cols[0])) for row in range(1, 10)]:
+                            if cell not in cage_.cells:
+                                cell.exclude({number})
+                    if same_box:
+                        for cell in [cell_dict.get((row, col)) for row, col in
+                                     get_cells_in_same_box(rows[0], cols[0])]:
+                            if cell not in cage_.cells:
+                                cell.exclude({number})
             # 检查每个格子是否仅一种可能
             for cell_ in cage_.cells:
                 if (not cell_.solved) and len(cell_.candidates) == 1:
@@ -420,7 +443,7 @@ class KillerSudokuSolver:
                     updated = True
             # 检查笼内分布
             if cage_.solved and any(not cell_.solved for cell_ in cage_.cells):
-                for number in range(1,10):
+                for number in range(1, 10):
                     if len(cage_.number_dict[number]) > 1:
                         rows = [cell.row for cell in cage_.number_dict[number]]
                         cols = [cell.col for cell in cage_.number_dict[number]]
@@ -457,7 +480,7 @@ class KillerSudokuSolver:
                 for row in range(row1, row2 + 1):
                     for col in range(1, 10):
                         cells.add(cell_dict.get((row, col)))
-                cells_count = len(cells)
+                        cells_count += 1
                 cage_cells = cells.copy()
                 for cell in cells:
                     cages.add(self.cages[cell.cage])
@@ -477,9 +500,10 @@ class KillerSudokuSolver:
                         self.cages.extend(self.cages[cell_.cage].split(cage_sum, cage_cells))
                     elif all(cell.row == cell_.row for cell in cage_cells) or all(
                             cell.col == cell_.col for cell in cage_cells) or all(
-                            cell in [cell_dict.get((row, col)) for row, col in
+                        cell in [cell_dict.get((row, col)) for row, col in
                                  get_cells_in_same_box(cell_.row, cell_.col)] for cell in cage_cells):
-                        self.cages.append(Cage.virtual_cage(cage_sum, cage_cells))                    # print(f"{row1} to {row2}: {cells_count} cages:{[cage.ID for cage in cages]} known_cells_count:{known_cells_count}")
+                        self.cages.append(Cage.virtual_cage(cage_sum,
+                                                            cage_cells))  # print(f"{row1} to {row2}: {cells_count} cages:{[cage.ID for cage in cages]} known_cells_count:{known_cells_count}")
         for col1 in range(1, 10):
             for col2 in range(col1, 10):
                 cells = set()
@@ -490,7 +514,7 @@ class KillerSudokuSolver:
                 for col in range(col1, col2 + 1):
                     for row in range(1, 10):
                         cells.add(cell_dict.get((row, col)))
-                cells_count = len(cells)
+                        cells_count += 1
                 cage_cells = cells.copy()
                 for cell in cells:
                     cages.add(self.cages[cell.cage])
@@ -510,9 +534,10 @@ class KillerSudokuSolver:
                         self.cages.extend(self.cages[cell_.cage].split(cage_sum, cage_cells))
                     elif all(cell.row == cell_.row for cell in cage_cells) or all(
                             cell.col == cell_.col for cell in cage_cells) or all(
-                            cell in [cell_dict.get((row, col)) for row, col in
+                        cell in [cell_dict.get((row, col)) for row, col in
                                  get_cells_in_same_box(cell_.row, cell_.col)] for cell in cage_cells):
-                        self.cages.append(Cage.virtual_cage(cage_sum, cage_cells))                    # print(f"{col1} to {col2}: {cells_count} cages:{[cage.ID for cage in cages]} known_cells_count:{known_cells_count}")
+                        self.cages.append(Cage.virtual_cage(cage_sum,
+                                                            cage_cells))  # print(f"{col1} to {col2}: {cells_count} cages:{[cage.ID for cage in cages]} known_cells_count:{known_cells_count}")
         box_size = 3
         for box_row in range(1, 10, box_size):
             for box_col in range(1, 10, box_size):
@@ -524,7 +549,7 @@ class KillerSudokuSolver:
                 for row in range(box_row, box_row + box_size):
                     for col in range(box_col, box_col + box_size):
                         cells.add(cell_dict.get((row, col)))
-                cells_count = len(cells)
+                        cells_count += 1
                 cage_cells = cells.copy()
                 for cell in cells:
                     cages.add(self.cages[cell.cage])
@@ -544,7 +569,7 @@ class KillerSudokuSolver:
                         self.cages.extend(self.cages[cell_.cage].split(cage_sum, cage_cells))
                     elif all(cell.row == cell_.row for cell in cage_cells) or all(
                             cell.col == cell_.col for cell in cage_cells) or all(
-                            cell in [cell_dict.get((row, col)) for row, col in
+                        cell in [cell_dict.get((row, col)) for row, col in
                                  get_cells_in_same_box(cell_.row, cell_.col)] for cell in cage_cells):
                         self.cages.append(Cage.virtual_cage(cage_sum, cage_cells))
         # 外
@@ -559,7 +584,7 @@ class KillerSudokuSolver:
                 for col in range(row1, row2 + 1):
                     for row in range(1, 10):
                         cells.add(cell_dict.get((row, col)))
-                cells_count = len(cells)
+                        cells_count += 1
                 for cell in cells:
                     cages.add(self.cages[cell.cage])
                 for cage in cages:
@@ -578,7 +603,7 @@ class KillerSudokuSolver:
                         self.cages.extend(self.cages[cell_.cage].split(cage_sum, cage_cells))
                     elif all(cell.row == cell_.row for cell in cage_cells) or all(
                             cell.col == cell_.col for cell in cage_cells) or all(
-                            cell in [cell_dict.get((row, col)) for row, col in
+                        cell in [cell_dict.get((row, col)) for row, col in
                                  get_cells_in_same_box(cell_.row, cell_.col)] for cell in cage_cells):
                         self.cages.append(Cage.virtual_cage(cage_sum, cage_cells))
         for col1 in range(1, 10):
@@ -592,7 +617,7 @@ class KillerSudokuSolver:
                 for col in range(col1, col2 + 1):
                     for row in range(1, 10):
                         cells.add(cell_dict.get((row, col)))
-                cells_count = len(cells)
+                        cells_count += 1
                 for cell in cells:
                     cages.add(self.cages[cell.cage])
                 for cage in cages:
@@ -611,7 +636,7 @@ class KillerSudokuSolver:
                         self.cages.extend(self.cages[cell_.cage].split(cage_sum, cage_cells))
                     elif all(cell.row == cell_.row for cell in cage_cells) or all(
                             cell.col == cell_.col for cell in cage_cells) or all(
-                            cell in [cell_dict.get((row, col)) for row, col in
+                        cell in [cell_dict.get((row, col)) for row, col in
                                  get_cells_in_same_box(cell_.row, cell_.col)] for cell in cage_cells):
                         self.cages.append(Cage.virtual_cage(cage_sum, cage_cells))
         box_size = 3
@@ -626,7 +651,7 @@ class KillerSudokuSolver:
                 for row in range(box_row, box_row + box_size):
                     for col in range(box_col, box_col + box_size):
                         cells.add(cell_dict.get((row, col)))
-                cells_count = len(cells)
+                        cells_count += 1
                 for cell in cells:
                     cages.add(self.cages[cell.cage])
                 for cage in cages:
@@ -668,15 +693,15 @@ class KillerSudokuSolver:
                 text = ','.join(str(num) for num in cell_dict.get((i + 1, j + 1)).candidates)
                 ax.text(j + 0.5, 8.5 - i, text, va='center', ha='center')
 
-        # plt.savefig(f'step{self.step}')
+        # plt.savefig(f''step{self.step}'')
         # plt.close()
         plt.show()
 
     def solve(self):
         loop = 0
-        loop_max = 3
-        self.rule45()
+        loop_max = 5
         self.update()
+        cell_dict.get((4,4)).exclude({2,3,4})
         while not self.is_solved():
             self.rule45()
             self.update()
@@ -718,7 +743,17 @@ if __name__ == "__main__":
     # cage_constraints = [(26, [[0, 0], [0, 1], [1, 0], [1, 1]]), (13, [[0, 5], [0, 6]]), (17, [[0, 2], [0, 3], [0, 4], [1, 2]]), (8, [[0, 7], [1, 7]]), (23, [[2, 0], [2, 1], [3, 0], [3, 1], [4, 0]]), (11, [[1, 3], [1, 4], [2, 2], [2, 3]]), (30, [[1, 5], [1, 6], [2, 4], [2, 5], [2, 6], [2, 7]]), (17, [[3, 2], [3, 3]]), (4, [[3, 6], [3, 7]]), (23, [[0, 8], [1, 8], [2, 8], [3, 8]]), (11, [[4, 1], [4, 2]]), (9, [[4, 3], [5, 3]]), (11, [[3, 4], [4, 4], [5, 4]]), (8, [[3, 5], [4, 5]]), (16, [[4, 6], [4, 7]]), (11, [[5, 0], [6, 0], [7, 0], [8, 0]]), (8, [[5, 1], [5, 2]]), (11, [[5, 5], [5, 6]]), (39, [[6, 1], [6, 2], [6, 3], [6, 4], [7, 2], [7, 3]]), (15, [[6, 5], [6, 6], [7, 4], [7, 5]]), (28, [[4, 8], [5, 7], [5, 8], [6, 7], [6, 8]]), (16, [[7, 1], [8, 1]]), (22, [[7, 6], [8, 4], [8, 5], [8, 6]]), (10, [[8, 2], [8, 3]]), (18, [[7, 7], [7, 8], [8, 7], [8, 8]])]
 
     # 26079
-    cage_constraints = [(8, [[0, 0], [0, 1]]), (25, [[0, 2], [0, 3], [0, 4], [0, 5], [0, 6]]), (12, [[0, 7], [0, 8]]), (25, [[1, 0], [1, 1], [2, 0], [3, 0]]), (23, [[1, 7], [1, 8], [2, 8], [3, 8]]), (28, [[1, 2], [2, 1], [2, 2], [3, 2], [4, 2]]), (6, [[1, 3], [2, 3]]), (14, [[1, 4], [2, 4]]), (6, [[1, 5], [2, 5]]), (23, [[1, 6], [2, 6], [2, 7], [3, 6], [4, 6]]), (14, [[3, 3], [3, 4], [3, 5]]), (5, [[3, 1], [4, 1]]), (13, [[4, 3], [4, 4], [4, 5]]), (11, [[3, 7], [4, 7]]), (18, [[4, 0], [5, 0], [6, 0]]), (14, [[4, 8], [5, 8], [6, 8]]), (13, [[5, 1], [6, 1]]), (14, [[5, 2], [6, 2]]), (16, [[5, 3], [6, 3], [7, 3]]), (7, [[5, 4], [6, 4]]), (20, [[5, 5], [6, 5], [7, 5]]), (8, [[5, 6], [6, 6]]), (5, [[5, 7], [6, 7]]), (22, [[7, 1], [7, 2], [8, 2], [8, 3]]), (22, [[7, 6], [7, 7], [8, 5], [8, 6]]), (10, [[7, 0], [8, 0], [8, 1]]), (8, [[7, 4], [8, 4]]), (15, [[7, 8], [8, 7], [8, 8]])]
+    cage_constraints = [(8, [[0, 0], [0, 1]]), (25, [[0, 2], [0, 3], [0, 4], [0, 5], [0, 6]]), (12, [[0, 7], [0, 8]]),
+                        (25, [[1, 0], [1, 1], [2, 0], [3, 0]]), (23, [[1, 7], [1, 8], [2, 8], [3, 8]]),
+                        (28, [[1, 2], [2, 1], [2, 2], [3, 2], [4, 2]]), (6, [[1, 3], [2, 3]]), (14, [[1, 4], [2, 4]]),
+                        (6, [[1, 5], [2, 5]]), (23, [[1, 6], [2, 6], [2, 7], [3, 6], [4, 6]]),
+                        (14, [[3, 3], [3, 4], [3, 5]]), (5, [[3, 1], [4, 1]]), (13, [[4, 3], [4, 4], [4, 5]]),
+                        (11, [[3, 7], [4, 7]]), (18, [[4, 0], [5, 0], [6, 0]]), (14, [[4, 8], [5, 8], [6, 8]]),
+                        (13, [[5, 1], [6, 1]]), (14, [[5, 2], [6, 2]]), (16, [[5, 3], [6, 3], [7, 3]]),
+                        (7, [[5, 4], [6, 4]]), (20, [[5, 5], [6, 5], [7, 5]]), (8, [[5, 6], [6, 6]]),
+                        (5, [[5, 7], [6, 7]]), (22, [[7, 1], [7, 2], [8, 2], [8, 3]]),
+                        (22, [[7, 6], [7, 7], [8, 5], [8, 6]]), (10, [[7, 0], [8, 0], [8, 1]]), (8, [[7, 4], [8, 4]]),
+                        (15, [[7, 8], [8, 7], [8, 8]])]
 
     killer_solver = KillerSudokuSolver(cage_constraints=cage_constraints)
 
