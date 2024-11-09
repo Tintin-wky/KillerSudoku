@@ -128,8 +128,7 @@ class KillerSudokuSolver:
                       for box_row in range(3) for box_col in range(3)]
         self.cages = [Cage(sum,{self.cell[row][col] for row, col in cells}) for sum, cells in cage_constraints]
         self.step = 0
-        self.record = []
-        self.info = []
+        self.steps = [{'board':self.board(),'action':"Initializing"}]
         self.updated = False
 
     def get_box(self, row, col):
@@ -148,14 +147,14 @@ class KillerSudokuSolver:
                 break
         if visualize:
             self.visualization()
-        return self.solution() if self.is_solved() else self.board(), self.record, self.info
+        return self.is_solved(), self.steps
         
     def board(self):
         board_matrix = [[set() for _ in range(9)] for _ in range(9)] 
 
         for row in range(9):
             for col in range(9):
-                board_matrix[row][col] = self.cell[row][col].candidates
+                board_matrix[row][col] = self.cell[row][col].candidates.copy()
 
         return board_matrix
 
@@ -215,22 +214,20 @@ class KillerSudokuSolver:
             return
         if number in cell.candidates:
             cell.exclude({number})
-            self.record.append(self.board())
-            message = f"Exclude {number} at ({cell.row+1},{cell.col+1}) {info}"
-            self.info.append(message)
-            print(message)
+            message = f"Exclude {number} at ({cell.row+1},{cell.col+1}) \n{info}"
+            self.steps.append({'board':self.board(),'action':message})
+            # print(message)
 
     def set_number(self, cell:Cell, number:int, info):
         if cell.solved:
             return
         cell.set_candidates({number})
         cell.solve()
-        self.record.append(self.board())
         self.step += 1
         self.updated = True
-        message = f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} {info}"
-        self.info.append(message)
-        print(message)
+        message = f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} \n{info}"
+        self.steps.append({'board':self.board(),'action':message})
+        # print(message)
 
         row, col, cage_id = cell.row, cell.col, cell.cage
         for peer in self.rows[row]:
@@ -406,25 +403,36 @@ class KillerSudokuSolver:
     def find_naked_pairs(self, cells):
         """
         检查给定的单元格列表（行、列或宫格）中的“裸对”情况，
-        并从其他单元格的候选解中排除“裸对”数字。
+        并从其他单元格的候选解中排除“裸对”数字，同时返回裸对所在单元格的位置。
         """
         candidates_count = {}
+        cell_positions = {}
+
         # 统计候选数字为2的单元格
         for cell in cells:
             if len(cell.candidates) == 2:
                 candidates_key = tuple(sorted(cell.candidates))
                 candidates_count[candidates_key] = candidates_count.get(candidates_key, 0) + 1
+                
+                # 记录候选数字为2的单元格的位置
+                if candidates_key not in cell_positions:
+                    cell_positions[candidates_key] = []
+                cell_positions[candidates_key].append((cell.row, cell.col))
 
         # 筛选出“裸对”
-        naked_pairs = [pair for pair, count in candidates_count.items() if count == 2]
-        
-        # 从其他单元格中排除“裸对”数字
-        for naked_pair in naked_pairs:
-            for cell in cells:
-                if cell.candidates != set(naked_pair):
-                    for number in set(naked_pair):
-                        self.exclude(cell, number, info=f"[naked_pairs] {naked_pair}")        
+        naked_pairs_info = []
+        for pair, count in candidates_count.items():
+            if count == 2:
+                # 获取裸对的位置
+                positions = cell_positions[pair]
+                naked_pairs_info.append({"pair": pair, "positions": positions})
 
+                # 从其他单元格中排除“裸对”数字
+                for cell in cells:
+                    if cell.candidates != set(pair):
+                        for number in set(pair):
+                            self.exclude(cell, number, info=f"[naked_pairs] {pair} at {positions}")
+    
     def rule45(self, cage_max=3):
         # 内
         for row1 in range(9):

@@ -25,7 +25,8 @@ pytest .
 ```
 
 ## Run code
+change your_sudoku_Id to something like ***26274*** which you can find on [dailykillersudoku.com](https://www.dailykillersudoku.com)
 
 ```bash
-python3 killer_sudoku/killer_client.py
+python3 killer_sudoku/killer_client.py --id your_sudoku_Id
 ```
