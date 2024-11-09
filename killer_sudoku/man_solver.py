@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
+import numpy as np
 from itertools import permutations
-from typing import List, Tuple, Set, Dict
+from typing import List, Set
 
 class Cell:
     def __init__(self, row, col, cage=None):
@@ -219,17 +220,45 @@ class KillerSudokuSolver:
                 peer.exclude(number,info=f"[update]Same cage of {cell}")
 
     def visualization(self):
-        fig, ax = plt.subplots(figsize=(18, 18))
-        for x in range(10):
-            ax.axhline(x, color='black', linewidth=1 if x % 3 else 3)
-            ax.axvline(x, color='black', linewidth=1 if x % 3 else 3)
-        ax.axis('off')
-
+        """绘制数独棋盘，并在未解的单元格中显示可能的候选数字"""
+        cell_size = 1
+        fig, ax = plt.subplots(figsize=(9, 9))
+        
+        # 绘制单元格
         for i in range(9):
             for j in range(9):
-                text = ','.join(str(num) for num in self.cell[i][j].candidates)
-                ax.text(j + 0.5, 8.5 - i, text, va='center', ha='center')
-
+                x, y = j * cell_size, 8 - i * cell_size
+                
+                # 绘制单元格边框
+                ax.add_patch(plt.Rectangle((x, y), cell_size, cell_size, fill=False))
+                
+                # 填充数字或候选数字
+                candidates = self.cell[i][j].candidates
+                candidate_text = " ".join(str(num) for num in candidates)
+                if len(candidates) == 1:
+                    candidate = candidates.pop()
+                    # 已确定的数字，使用较大字体居中显示
+                    ax.text(x + 0.5, y + 0.5, candidate_text, fontsize=24, ha='center', va='center')
+                else:
+                    # 未确定的格子，显示候选数字
+                    # 将候选数字按 3x3 排列在单元格内
+                    for idx, candidate in enumerate(candidates):
+                        cx = x + (idx % 3) * 0.3 + 0.2
+                        cy = y + (idx // 3) * 0.3 + 0.2
+                        ax.text(cx, cy, str(candidate), fontsize=10, ha='center', va='center', color='blue')
+        
+        # 绘制粗线条分隔 3x3 宫
+        for i in range(0, 10, 3):
+            ax.plot([0, 9], [i, i], 'k-', linewidth=3)
+            ax.plot([i, i], [0, 9], 'k-', linewidth=3)
+        
+        # 设置坐标轴
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xlim(0, 9)
+        ax.set_ylim(0, 9)
+        ax.set_aspect('equal')
+        
         plt.show()
 
     def reduce_in_box(self, box_cells, number):
@@ -582,7 +611,7 @@ if __name__ == "__main__":
 
     killer_solver = KillerSudokuSolver(cage_constraints=cage_constraints)
 
-    killer_solver.solve()
+    killer_solver.solve(visualize=True)
 
     # with open("solution.txt", "w") as file:
     #     original_stdout = sys.stdout
