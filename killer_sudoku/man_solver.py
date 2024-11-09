@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from pprint import pprint
 from itertools import permutations
 from typing import List, Set
 
@@ -140,8 +141,20 @@ class KillerSudokuSolver:
             if loop > loop_max:
                 break
         if visualize:
-            self.visualization()  
-        return self.solution()
+            self.visualization()
+        if self.is_solved():  
+            return self.solution()
+        else:
+            return self.board()
+        
+    def board(self):
+        board_matrix = [[set() for _ in range(9)] for _ in range(9)] 
+
+        for row in range(9):
+            for col in range(9):
+                board_matrix[row][col] = self.cell[row][col].candidates
+
+        return board_matrix
 
     def solution(self):
         solution_matrix = [[0 for _ in range(9)] for _ in range(9)] 
@@ -153,7 +166,6 @@ class KillerSudokuSolver:
                     solution_matrix[row][col] = list(cell.candidates)[0]
                 else:
                     solution_matrix[row][col] = 0
-
         return solution_matrix
 
     def update(self):
@@ -234,11 +246,9 @@ class KillerSudokuSolver:
                 
                 # 填充数字或候选数字
                 candidates = self.cell[i][j].candidates
-                candidate_text = " ".join(str(num) for num in candidates)
                 if len(candidates) == 1:
-                    candidate = candidates.pop()
                     # 已确定的数字，使用较大字体居中显示
-                    ax.text(x + 0.5, y + 0.5, candidate_text, fontsize=24, ha='center', va='center')
+                    ax.text(x + 0.5, y + 0.5, str(list(candidates)[0]), fontsize=24, ha='center', va='center')
                 else:
                     # 未确定的格子，显示候选数字
                     # 将候选数字按 3x3 排列在单元格内
@@ -611,7 +621,7 @@ if __name__ == "__main__":
 
     killer_solver = KillerSudokuSolver(cage_constraints=cage_constraints)
 
-    killer_solver.solve(visualize=True)
+    pprint(killer_solver.solve(visualize=True))
 
     # with open("solution.txt", "w") as file:
     #     original_stdout = sys.stdout
