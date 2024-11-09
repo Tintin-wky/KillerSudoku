@@ -15,6 +15,7 @@ Includes scraper and parser for dailykillersudoku.com, puzzles [here](https://ww
 ```bash
 pip install pulp
 pip install numpy
+pip install matplotlib
 ```
 
 ## Run tests 

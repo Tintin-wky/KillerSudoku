@@ -112,7 +112,7 @@ class Cage:
 
 class KillerSudokuSolver:
     def __init__(self, cage_constraints):      
-        self.cell = [[Cell(row, col, None) for col in range(9)] for row in range(9)]
+        self.cell = [[Cell(row, col) for col in range(9)] for row in range(9)]
         self.cells = {cell for row in self.cell for cell in row}
         self.rows = [[self.cell[row][col] for col in range(9)] for row in range(9)]
         self.cols = [[self.cell[row][col] for row in range(9)] for col in range(9)]
@@ -126,7 +126,112 @@ class KillerSudokuSolver:
 
     def get_box(self, row, col):
         return (row // 3) * 3 + (col // 3)
-    
+
+    def is_solved(self):
+        return all(cell.solved for cell in self.cells)
+
+    def solve(self, visualize=False):
+        loop = 0
+        loop_max = 3
+        while not self.is_solved():
+            self.update()
+            loop += 1
+            if loop > loop_max:
+                break
+        if visualize:
+            self.visualization()  
+        return self.solution()
+
+    def solution(self):
+        solution_matrix = [[0 for _ in range(9)] for _ in range(9)] 
+
+        for row in range(9):
+            for col in range(9):
+                cell = self.cell[row][col]
+                if cell.solved and len(cell.candidates) == 1:
+                    solution_matrix[row][col] = list(cell.candidates)[0]
+                else:
+                    solution_matrix[row][col] = 0
+
+        return solution_matrix
+
+    def update(self):
+        self.updated = False
+
+        # 45法则
+        self.rule45()
+
+        # 裸对检查
+        for cells in self.rows:
+            self.find_naked_pairs(cells)
+        for cells in self.cols:
+            self.find_naked_pairs(cells)
+        for cells in self.boxes:   
+            self.find_naked_pairs(cells) 
+        for cage in self.cages:
+            self.find_naked_pairs(cage.cells) 
+
+        # 唯一性检查
+        for cells in self.rows:
+            for number in range(1, 10):
+                self.reduce_in_row(cells,number)
+        for cells in self.cols:
+            for number in range(1, 10):
+                self.reduce_in_column(cells,number)
+        for cells in self.boxes:
+            for number in range(1, 10):
+                self.reduce_in_box(cells,number)
+        for cage in self.cages:
+            if cage.solved and all(cell.solved for cell in cage.cells):
+                continue
+            if (not cage.solved) and len(cage.combinations) == 1:
+                cage.solved = True
+            cage.update()
+            if cage.certain_number != set():
+                for number in cage.certain_number:
+                    self.reduce_in_cage(cage.cells, number)
+
+        if self.updated:
+            self.update()
+
+    def set_number(self, cell:Cell, number:int, info):
+        if cell.solved:
+            return
+        cell.set_candidates({number})
+        cell.solved = True
+        self.step += 1
+        self.updated = True
+        print(f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} {info}")
+
+        row, col, cage_id = cell.row, cell.col, cell.cage
+        for peer in self.rows[row]:
+            if not peer.solved and number in peer.candidates:
+                peer.exclude(number,info=f"[update]Same row of {cell}")
+        for peer in self.cols[col]:
+            if not peer.solved and number in peer.candidates:
+                peer.exclude(number,info=f"[update]Same col of {cell}")
+        for peer in self.boxes[self.get_box(row, col)]:
+            if not peer.solved and number in peer.candidates:
+                peer.exclude(number,info=f"[update]Same box of {cell}")
+        cage = self.cages[cage_id]
+        for peer in cage.cells:
+            if not peer.solved and number in peer.candidates:
+                peer.exclude(number,info=f"[update]Same cage of {cell}")
+
+    def visualization(self):
+        fig, ax = plt.subplots(figsize=(18, 18))
+        for x in range(10):
+            ax.axhline(x, color='black', linewidth=1 if x % 3 else 3)
+            ax.axvline(x, color='black', linewidth=1 if x % 3 else 3)
+        ax.axis('off')
+
+        for i in range(9):
+            for j in range(9):
+                text = ','.join(str(num) for num in self.cell[i][j].candidates)
+                ax.text(j + 0.5, 8.5 - i, text, va='center', ha='center')
+
+        plt.show()
+
     def reduce_in_box(self, box_cells, number):
         # 找出该数字在当前宫格内的候选单元格
         candidates = [cell for cell in box_cells if number in cell.candidates]
@@ -268,45 +373,6 @@ class KillerSudokuSolver:
                 if cell.candidates != set(naked_pair):
                     for number in set(naked_pair):
                         cell.exclude(number, info=f"[naked_pairs] {naked_pair}")        
-
-    def update(self):
-        self.updated = False
-
-        # 45法则
-        self.rule45()
-
-        # 裸对检查
-        for cells in self.rows:
-            self.find_naked_pairs(cells)
-        for cells in self.cols:
-            self.find_naked_pairs(cells)
-        for cells in self.boxes:   
-            self.find_naked_pairs(cells) 
-        for cage in self.cages:
-            self.find_naked_pairs(cage.cells) 
-
-        # 唯一性检查
-        for cells in self.rows:
-            for number in range(1, 10):
-                self.reduce_in_row(cells,number)
-        for cells in self.cols:
-            for number in range(1, 10):
-                self.reduce_in_column(cells,number)
-        for cells in self.boxes:
-            for number in range(1, 10):
-                self.reduce_in_box(cells,number)
-        for cage in self.cages:
-            if cage.solved and all(cell.solved for cell in cage.cells):
-                continue
-            if (not cage.solved) and len(cage.combinations) == 1:
-                cage.solved = True
-            cage.update()
-            if cage.certain_number != set():
-                for number in cage.certain_number:
-                    self.reduce_in_cage(cage.cells, number)
-
-        if self.updated:
-            self.update()
 
     def rule45(self, cage_max=3):
         # 内
@@ -495,57 +561,6 @@ class KillerSudokuSolver:
                         cell.col == cell_.col for cell in cage_cells) or all(
                     cell in self.boxes[self.get_box(cell_.row,cell_.col)] for cell in cage_cells):
                     self.cages.append(Cage.virtual_cage(cage_sum, cage_cells))
-
-    def set_number(self, cell:Cell, number:int, info):
-        if cell.solved:
-            return
-        cell.set_candidates({number})
-        cell.solved = True
-        self.step += 1
-        self.updated = True
-        print(f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} {info}")
-
-        row, col, cage_id = cell.row, cell.col, cell.cage
-        for peer in self.rows[row]:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same row of {cell}")
-        for peer in self.cols[col]:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same col of {cell}")
-        for peer in self.boxes[self.get_box(row, col)]:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same box of {cell}")
-        cage = self.cages[cage_id]
-        for peer in cage.cells:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same cage of {cell}")
-
-    def is_solved(self):
-        return all(cell.solved for cell in self.cells)
-
-    def visualization(self):
-        fig, ax = plt.subplots(figsize=(18, 18))
-        for x in range(10):
-            ax.axhline(x, color='black', linewidth=1 if x % 3 else 3)
-            ax.axvline(x, color='black', linewidth=1 if x % 3 else 3)
-        ax.axis('off')
-
-        for i in range(9):
-            for j in range(9):
-                text = ','.join(str(num) for num in self.cell[i][j].candidates)
-                ax.text(j + 0.5, 8.5 - i, text, va='center', ha='center')
-
-        plt.show()
-
-    def solve(self):
-        loop = 0
-        loop_max = 3
-        while not self.is_solved():
-            self.update()
-            loop += 1
-            if loop > loop_max:
-                break
-        self.visualization()
 
 
 if __name__ == "__main__":

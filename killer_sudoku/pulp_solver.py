@@ -19,7 +19,7 @@ class KillerSudokuSolver:
                 (12, [[0,0],[0,1],[0,2]])
         """
         self.cage_constraints = cage_constraints
-        self.problem = pulp.LpProblem("Killer Sudoku Problem")
+        self.problem = pulp.LpProblem("Killer_Sudoku_Problem")
         self.choices = pulp.LpVariable.dicts(
             "Choice", (range(9), range(9), range(1, 10),), cat="Binary"
         )

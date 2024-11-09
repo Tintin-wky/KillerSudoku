@@ -35,8 +35,4 @@ if __name__ == "__main__":
     killer_solver = KillerSudokuSolver(cage_constraints=killer.cages)
 
     print("Solving Sudoku")
-    killer_solver.solve()
-
-    # print("Solution found")
-    # for row in solution:
-    #     print(row)
+    killer_solver.solve(visualize=True)
