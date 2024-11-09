@@ -1,6 +1,4 @@
 import matplotlib.pyplot as plt
-import numpy as np
-from pprint import pprint
 from itertools import permutations
 from typing import List, Set
 
@@ -12,17 +10,20 @@ class Cell:
         self.candidates = set(range(1, 10))
         self.solved = False
 
-    def exclude(self, number:int, info):
-        if not self.solved :
-            if number in self.candidates:
-                self.candidates -= {number}
-                print(f"Exclude {number} at ({self.row+1},{self.col+1}) {info}")
+    def exclude(self, candidates:Set):
+        self.candidates -= candidates
 
     def set_cage(self, cage:int):
         self.cage = cage
 
     def set_candidates(self, candidates:Set):
         self.candidates = candidates
+
+    def solve(self):
+        self.solved = True
+
+    def intersection_candidates(self,candidates):
+        self.candidates &= candidates
 
     def __repr__(self):
         if self.solved:
@@ -63,6 +64,9 @@ class Cage:
         self.solved = False
         self.update()
 
+    def solve(self):
+        self.solved = True
+
     def split(self, sum, cells):
         return Cage(sum, cells), Cage(self.sum - sum, self.cells - cells)
 
@@ -101,7 +105,7 @@ class Cage:
                     print(f"!!!{self}")
 
         for cell in self.cells:
-            cell.candidates &= cell_number[cell]
+            cell.intersection_candidates(cell_number[cell])
         self.number_dict = {number: {cell for cell in self.cells if number in cell.candidates} for number in range(1, 10)}
         self.certain_number = {number for number in range(1, 10) if all(number in combination for combination in self.combinations)}
 
@@ -124,6 +128,8 @@ class KillerSudokuSolver:
                       for box_row in range(3) for box_col in range(3)]
         self.cages = [Cage(sum,{self.cell[row][col] for row, col in cells}) for sum, cells in cage_constraints]
         self.step = 0
+        self.record = []
+        self.info = []
         self.updated = False
 
     def get_box(self, row, col):
@@ -142,10 +148,7 @@ class KillerSudokuSolver:
                 break
         if visualize:
             self.visualization()
-        if self.is_solved():  
-            return self.solution()
-        else:
-            return self.board()
+        return self.solution() if self.is_solved() else self.board(), self.record, self.info
         
     def board(self):
         board_matrix = [[set() for _ in range(9)] for _ in range(9)] 
@@ -198,7 +201,7 @@ class KillerSudokuSolver:
             if cage.solved and all(cell.solved for cell in cage.cells):
                 continue
             if (not cage.solved) and len(cage.combinations) == 1:
-                cage.solved = True
+                cage.solve()
             cage.update()
             if cage.certain_number != set():
                 for number in cage.certain_number:
@@ -207,29 +210,38 @@ class KillerSudokuSolver:
         if self.updated:
             self.update()
 
+    def exclude(self, cell:Cell, number:int, info):
+        if cell.solved:
+            return
+        if number in cell.candidates:
+            cell.exclude({number})
+            self.record.append(self.board())
+            message = f"Exclude {number} at ({cell.row+1},{cell.col+1}) {info}"
+            self.info.append(message)
+            print(message)
+
     def set_number(self, cell:Cell, number:int, info):
         if cell.solved:
             return
         cell.set_candidates({number})
-        cell.solved = True
+        cell.solve()
+        self.record.append(self.board())
         self.step += 1
         self.updated = True
-        print(f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} {info}")
+        message = f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} {info}"
+        self.info.append(message)
+        print(message)
 
         row, col, cage_id = cell.row, cell.col, cell.cage
         for peer in self.rows[row]:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same row of {cell}")
+            self.exclude(peer,number,info=f"[update]Same row of {cell}")
         for peer in self.cols[col]:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same col of {cell}")
+            self.exclude(peer,number,info=f"[update]Same col of {cell}")
         for peer in self.boxes[self.get_box(row, col)]:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same box of {cell}")
+            self.exclude(peer,number,info=f"[update]Same box of {cell}")
         cage = self.cages[cage_id]
         for peer in cage.cells:
-            if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[update]Same cage of {cell}")
+            self.exclude(peer,number,info=f"[update]Same cage of {cell}")
 
     def visualization(self):
         """绘制数独棋盘，并在未解的单元格中显示可能的候选数字"""
@@ -286,24 +298,24 @@ class KillerSudokuSolver:
         if len(rows) == 1:
             row = rows.pop()
             for cell in self.rows[row]:
-                if cell not in box_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_box]Same row of {candidates}")
+                if cell not in box_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_box]Same row of {candidates}")
 
         # 如果候选单元格全在同一列, 从该列的其他宫格中排除该数字
         cols = {cell.col for cell in candidates}
         if len(cols) == 1:
             col = cols.pop()
             for cell in self.cols[col]:
-                if cell not in box_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_box]Same col of {candidates}")
+                if cell not in box_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_box]Same col of {candidates}")
 
         # 如果候选单元格全在同一笼, 从该笼的其他宫格中排除该数字
         cages = {cell.cage for cell in candidates}
         if len(cages) == 1:
             cage = cages.pop()
             for cell in self.cages[cage].cells:
-                if cell not in box_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_box]Same cage of {candidates}")
+                if cell not in box_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_box]Same cage of {candidates}")
 
     def reduce_in_row(self, row_cells, number):
         # 找出该数字在当前宫格内的候选单元格
@@ -320,16 +332,16 @@ class KillerSudokuSolver:
         if len(box_ids) == 1:
             box_id = box_ids.pop()
             for cell in self.boxes[box_id]:
-                if cell not in row_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_row]Same box of {candidates}")
+                if cell not in row_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_row]Same box of {candidates}")
         
         # 如果候选单元格全在同一笼, 从该笼的其他宫格中排除该数字
         cages = {cell.cage for cell in candidates}
         if len(cages) == 1:
             cage = cages.pop()
             for cell in self.cages[cage].cells:
-                if cell not in row_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_row]Same cage of {candidates}")
+                if cell not in row_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_row]Same cage of {candidates}")
 
     def reduce_in_column(self, col_cells, number):
         # 找出该数字在当前宫格内的候选单元格
@@ -346,16 +358,16 @@ class KillerSudokuSolver:
         if len(box_ids) == 1:
             box_id = box_ids.pop()
             for cell in self.boxes[box_id]:
-                if cell not in col_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_column]Same box of {candidates}")
+                if cell not in col_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_column]Same box of {candidates}")
 
         # 如果候选单元格全在同一笼, 从该笼的其他宫格中排除该数字
         cages = {cell.cage for cell in candidates}
         if len(cages) == 1:
             cage = cages.pop()
             for cell in self.cages[cage].cells:
-                if cell not in col_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_column]Same cage of {candidates}")
+                if cell not in col_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_column]Same cage of {candidates}")
 
     def reduce_in_cage(self, cage_cells, number):
         # 找出该数字在当前宫格内的候选单元格
@@ -372,24 +384,24 @@ class KillerSudokuSolver:
         if len(rows) == 1:
             row = rows.pop()
             for cell in self.rows[row]:
-                if cell not in cage_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_cage]Same row of {candidates}")
+                if cell not in cage_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_cage]Same row of {candidates}")
 
         # 如果候选单元格全在同一列, 从该列的其他宫格中排除该数字
         cols = {cell.col for cell in candidates}
         if len(cols) == 1:
             col = cols.pop()
             for cell in self.cols[col]:
-                if cell not in cage_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_cage]Same col of {candidates}")
+                if cell not in cage_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_cage]Same col of {candidates}")
         
         # 如果候选单元格全部在同一个宫格, 从该宫格内的其他行中排除该数字
         box_ids = {self.get_box(cell.row, cell.col) for cell in candidates}
         if len(box_ids) == 1:
             box_id = box_ids.pop()
             for cell in self.boxes[box_id]:
-                if cell not in cage_cells and number in cell.candidates:
-                    cell.exclude(number,info=f"[reduce_in_cage]Same box of {candidates}")
+                if cell not in cage_cells:
+                    self.exclude(cell,number,info=f"[reduce_in_cage]Same box of {candidates}")
 
     def find_naked_pairs(self, cells):
         """
@@ -411,7 +423,7 @@ class KillerSudokuSolver:
             for cell in cells:
                 if cell.candidates != set(naked_pair):
                     for number in set(naked_pair):
-                        cell.exclude(number, info=f"[naked_pairs] {naked_pair}")        
+                        self.exclude(cell, number, info=f"[naked_pairs] {naked_pair}")        
 
     def rule45(self, cage_max=3):
         # 内
@@ -621,7 +633,7 @@ if __name__ == "__main__":
 
     killer_solver = KillerSudokuSolver(cage_constraints=cage_constraints)
 
-    pprint(killer_solver.solve(visualize=True))
+    killer_solver.solve(visualize=True)
 
     # with open("solution.txt", "w") as file:
     #     original_stdout = sys.stdout
