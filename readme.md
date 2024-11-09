@@ -30,3 +30,6 @@ change your_sudoku_Id to something like ***26274*** which you can find on [daily
 ```bash
 python3 killer_sudoku/killer_client.py --id your_sudoku_Id
 ```
+## User Interface
+![solver1](solver1.png)
+![solver2](solver2.png)

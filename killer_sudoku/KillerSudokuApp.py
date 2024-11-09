@@ -2,13 +2,16 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 from man_solver import KillerSudokuSolver
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
 class KillerSudokuApp:
-    def __init__(self, root, steps):
+    def __init__(self, root, steps, cage_constraints):
         self.root = root
         self.root.title("Sudoku Solver Visualization")
         self.steps = steps 
         self.step = 0
+        self.cage_constraints = cage_constraints
         
         self.prev_button = tk.Button(
             root,
@@ -116,9 +119,27 @@ class KillerSudokuApp:
         self.update_action_label()
 
     def draw_board(self):
-        """使用 matplotlib 绘制数独棋盘"""
+        """使用 matplotlib 绘制数独棋盘并添加杀手数独的Cage约束"""
         cell_size = 1
         self.ax.clear()
+
+        # 创建不同的颜色列表，用于区分每个Cage
+        colors = plt.cm.tab20.colors
+
+        # 绘制Cage约束
+        for cage_index, (target_sum, cells) in enumerate(self.cage_constraints):
+            cage_color = colors[cage_index % len(colors)]  # 选择颜色循环使用
+            for cell in cells:
+                i, j = cell
+                x, y = j * cell_size, 8 - i * cell_size
+                
+                # 绘制Cage的边框和填充颜色
+                self.ax.add_patch(plt.Rectangle((x, y), cell_size, cell_size, fill=True, color=cage_color, alpha=0.3))
+            
+            # 在Cage的第一个单元格内显示目标和约束值
+            first_cell_x, first_cell_y = cells[0][1] * cell_size, 8 - cells[0][0] * cell_size
+            self.ax.text(first_cell_x + 0.1, first_cell_y + 0.9, str(target_sum), fontsize=12, color='red', ha='left', va='top')
+
         # 绘制单元格
         for i in range(9):
             for j in range(9):
@@ -139,12 +160,12 @@ class KillerSudokuApp:
                         cx = x + (idx % 3) * 0.3 + 0.2
                         cy = y + (idx // 3) * 0.3 + 0.2
                         self.ax.text(cx, cy, str(candidate), fontsize=10, ha='center', va='center', color='blue')
-        
+
         # 绘制粗线条分隔 3x3 宫
         for i in range(0, 10, 3):
             self.ax.plot([0, 9], [i, i], 'k-', linewidth=3)
             self.ax.plot([i, i], [0, 9], 'k-', linewidth=3)
-        
+
         # 设置坐标轴
         self.ax.set_xticks([])
         self.ax.set_yticks([])
@@ -153,6 +174,7 @@ class KillerSudokuApp:
         self.ax.set_aspect('equal')
         self.figure.tight_layout()
         self.canvas.draw()
+
 
     def prev_step(self):
         """切换到上一步"""
@@ -195,9 +217,9 @@ if __name__ == "__main__":
     # 26274 Difficulty:6 Success
     cage_constraints = [(26, [[0, 0], [0, 1], [1, 0], [1, 1]]), (13, [[0, 5], [0, 6]]), (17, [[0, 2], [0, 3], [0, 4], [1, 2]]), (8, [[0, 7], [1, 7]]), (23, [[2, 0], [2, 1], [3, 0], [3, 1], [4, 0]]), (11, [[1, 3], [1, 4], [2, 2], [2, 3]]), (30, [[1, 5], [1, 6], [2, 4], [2, 5], [2, 6], [2, 7]]), (17, [[3, 2], [3, 3]]), (4, [[3, 6], [3, 7]]), (23, [[0, 8], [1, 8], [2, 8], [3, 8]]), (11, [[4, 1], [4, 2]]), (9, [[4, 3], [5, 3]]), (11, [[3, 4], [4, 4], [5, 4]]), (8, [[3, 5], [4, 5]]), (16, [[4, 6], [4, 7]]), (11, [[5, 0], [6, 0], [7, 0], [8, 0]]), (8, [[5, 1], [5, 2]]), (11, [[5, 5], [5, 6]]), (39, [[6, 1], [6, 2], [6, 3], [6, 4], [7, 2], [7, 3]]), (15, [[6, 5], [6, 6], [7, 4], [7, 5]]), (28, [[4, 8], [5, 7], [5, 8], [6, 7], [6, 8]]), (16, [[7, 1], [8, 1]]), (22, [[7, 6], [8, 4], [8, 5], [8, 6]]), (10, [[8, 2], [8, 3]]), (18, [[7, 7], [7, 8], [8, 7], [8, 8]])]
     killer_solver = KillerSudokuSolver(cage_constraints=cage_constraints)
-    steps = killer_solver.solve()
+    _,steps = killer_solver.solve()
 
     root = tk.Tk()
-    app = KillerSudokuApp(root, steps)
+    app = KillerSudokuApp(root, steps, cage_constraints)
     root.mainloop()
 
