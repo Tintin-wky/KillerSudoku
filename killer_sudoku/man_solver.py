@@ -127,15 +127,14 @@ class KillerSudokuSolver:
     def get_box(self, row, col):
         return (row // 3) * 3 + (col // 3)
     
-    def reduce_in_box(self, box, number):
+    def reduce_in_box(self, box_cells, number):
         # 找出该数字在当前宫格内的候选单元格
-        box_cells = self.boxes[box]
         candidates = [cell for cell in box_cells if number in cell.candidates]
 
         # 如果数字只在一个单元格内出现，则确定其值
         if len(candidates) == 1:
             candidate = candidates.pop()
-            self.set_number(candidate, number, info=f"[INFO]Only candidate in box[{box+1}]")
+            self.set_number(candidate, number, info=f"[info]Only candidate in box({box_cells[0].row//3+1},{box_cells[0].col//3+1})")
             return
 
         # 如果候选单元格全在同一行, 从该行的其他宫格中排除该数字
@@ -162,15 +161,14 @@ class KillerSudokuSolver:
                 if cell not in box_cells and number in cell.candidates:
                     cell.exclude(number,info=f"[reduce_in_box]Same cage of {candidates}")
 
-    def reduce_in_row(self, row, number):
+    def reduce_in_row(self, row_cells, number):
         # 找出该数字在当前宫格内的候选单元格
-        row_cells = self.rows[row]
         candidates = [cell for cell in row_cells if number in cell.candidates]
         
         # 如果数字只在一个单元格内出现，则确定其值
         if len(candidates) == 1:
             candidate = candidates.pop()
-            self.set_number(candidate, number, info=f"[INFO]Only candidate in row[{row+1}]")
+            self.set_number(candidate, number, info=f"[info]Only candidate in row[{row_cells[0].row+1}]")
             return
         
         # 如果候选单元格全部在同一个宫格, 从该宫格内的其他行中排除该数字
@@ -189,15 +187,14 @@ class KillerSudokuSolver:
                 if cell not in row_cells and number in cell.candidates:
                     cell.exclude(number,info=f"[reduce_in_row]Same cage of {candidates}")
 
-    def reduce_in_column(self, col, number):
+    def reduce_in_column(self, col_cells, number):
         # 找出该数字在当前宫格内的候选单元格
-        col_cells = self.cols[col]
         candidates = [cell for cell in col_cells if number in cell.candidates]
 
         # 如果数字只在一个单元格内出现，则确定其值
         if len(candidates) == 1:
             candidate = candidates.pop()
-            self.set_number(candidate, number, info=f"[INFO]Only candidate in col[{col+1}]")
+            self.set_number(candidate, number, info=f"[info]Only candidate in col[{col_cells[0].col+1}]")
             return
         
         # 如果候选单元格全部在同一个宫格, 从该宫格内的其他行中排除该数字
@@ -223,7 +220,7 @@ class KillerSudokuSolver:
         # 如果数字只在一个单元格内出现，则确定其值
         if len(candidates) == 1:
             candidate = candidates.pop()
-            self.set_number(candidate, number, info=f"[INFO]Only candidate in cage[{cage_cells}]")
+            self.set_number(candidate, number, info=f"[info]Only candidate in cage[{cage_cells}]")
             return
         
         # 如果候选单元格全在同一行, 从该行的其他宫格中排除该数字
@@ -270,10 +267,13 @@ class KillerSudokuSolver:
             for cell in cells:
                 if cell.candidates != set(naked_pair):
                     for number in set(naked_pair):
-                        cell.exclude(number, info=f"naked pairs {naked_pair}")        
+                        cell.exclude(number, info=f"[naked_pairs] {naked_pair}")        
 
     def update(self):
         self.updated = False
+
+        # 45法则
+        self.rule45()
 
         # 裸对检查
         for cells in self.rows:
@@ -282,28 +282,25 @@ class KillerSudokuSolver:
             self.find_naked_pairs(cells)
         for cells in self.boxes:   
             self.find_naked_pairs(cells) 
+        for cage in self.cages:
+            self.find_naked_pairs(cage.cells) 
 
         # 唯一性检查
-        for number in range(1, 10):
-            for row in range(9):
-                self.reduce_in_row(row,number)
-            for col in range(9):
-                self.reduce_in_column(col,number)
-            for box in range(9):
-                self.reduce_in_box(box,number)
-
+        for cells in self.rows:
+            for number in range(1, 10):
+                self.reduce_in_row(cells,number)
+        for cells in self.cols:
+            for number in range(1, 10):
+                self.reduce_in_column(cells,number)
+        for cells in self.boxes:
+            for number in range(1, 10):
+                self.reduce_in_box(cells,number)
         for cage in self.cages:
-            # 检查笼子的每个格子是否已解
-            if all(cell.solved for cell in cage.cells) and cage.solved:
+            if cage.solved and all(cell.solved for cell in cage.cells):
                 continue
-            # 检查笼子的组合是否已解
             if (not cage.solved) and len(cage.combinations) == 1:
                 cage.solved = True
-            # 更新笼子的组合解
             cage.update()
-            # 裸对检查
-            self.find_naked_pairs(cage.cells) 
-            # 唯一性检查
             if cage.certain_number != set():
                 for number in cage.certain_number:
                     self.reduce_in_cage(cage.cells, number)
@@ -506,22 +503,22 @@ class KillerSudokuSolver:
         cell.solved = True
         self.step += 1
         self.updated = True
-        print(f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} [INFO]{info}")
+        print(f"[{self.step}]Solved cell at ({cell.row+1}, {cell.col+1}): {number} {info}")
 
         row, col, cage_id = cell.row, cell.col, cell.cage
         for peer in self.rows[row]:
             if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[Update]Same row of {cell}")
+                peer.exclude(number,info=f"[update]Same row of {cell}")
         for peer in self.cols[col]:
             if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[Update]Same col of {cell}")
+                peer.exclude(number,info=f"[update]Same col of {cell}")
         for peer in self.boxes[self.get_box(row, col)]:
             if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[Update]Same box of {cell}")
+                peer.exclude(number,info=f"[update]Same box of {cell}")
         cage = self.cages[cage_id]
         for peer in cage.cells:
             if not peer.solved and number in peer.candidates:
-                peer.exclude(number,info=f"[Update]Same cage of {cell}")
+                peer.exclude(number,info=f"[update]Same cage of {cell}")
 
     def is_solved(self):
         return all(cell.solved for cell in self.cells)
@@ -544,7 +541,6 @@ class KillerSudokuSolver:
         loop = 0
         loop_max = 3
         while not self.is_solved():
-            self.rule45()
             self.update()
             loop += 1
             if loop > loop_max:
@@ -554,20 +550,20 @@ class KillerSudokuSolver:
 
 if __name__ == "__main__":
     # 26274 Difficulty:6 Success
-    # cage_constraints = [(26, [[0, 0], [0, 1], [1, 0], [1, 1]]), (13, [[0, 5], [0, 6]]), (17, [[0, 2], [0, 3], [0, 4], [1, 2]]), (8, [[0, 7], [1, 7]]), (23, [[2, 0], [2, 1], [3, 0], [3, 1], [4, 0]]), (11, [[1, 3], [1, 4], [2, 2], [2, 3]]), (30, [[1, 5], [1, 6], [2, 4], [2, 5], [2, 6], [2, 7]]), (17, [[3, 2], [3, 3]]), (4, [[3, 6], [3, 7]]), (23, [[0, 8], [1, 8], [2, 8], [3, 8]]), (11, [[4, 1], [4, 2]]), (9, [[4, 3], [5, 3]]), (11, [[3, 4], [4, 4], [5, 4]]), (8, [[3, 5], [4, 5]]), (16, [[4, 6], [4, 7]]), (11, [[5, 0], [6, 0], [7, 0], [8, 0]]), (8, [[5, 1], [5, 2]]), (11, [[5, 5], [5, 6]]), (39, [[6, 1], [6, 2], [6, 3], [6, 4], [7, 2], [7, 3]]), (15, [[6, 5], [6, 6], [7, 4], [7, 5]]), (28, [[4, 8], [5, 7], [5, 8], [6, 7], [6, 8]]), (16, [[7, 1], [8, 1]]), (22, [[7, 6], [8, 4], [8, 5], [8, 6]]), (10, [[8, 2], [8, 3]]), (18, [[7, 7], [7, 8], [8, 7], [8, 8]])]
+    cage_constraints = [(26, [[0, 0], [0, 1], [1, 0], [1, 1]]), (13, [[0, 5], [0, 6]]), (17, [[0, 2], [0, 3], [0, 4], [1, 2]]), (8, [[0, 7], [1, 7]]), (23, [[2, 0], [2, 1], [3, 0], [3, 1], [4, 0]]), (11, [[1, 3], [1, 4], [2, 2], [2, 3]]), (30, [[1, 5], [1, 6], [2, 4], [2, 5], [2, 6], [2, 7]]), (17, [[3, 2], [3, 3]]), (4, [[3, 6], [3, 7]]), (23, [[0, 8], [1, 8], [2, 8], [3, 8]]), (11, [[4, 1], [4, 2]]), (9, [[4, 3], [5, 3]]), (11, [[3, 4], [4, 4], [5, 4]]), (8, [[3, 5], [4, 5]]), (16, [[4, 6], [4, 7]]), (11, [[5, 0], [6, 0], [7, 0], [8, 0]]), (8, [[5, 1], [5, 2]]), (11, [[5, 5], [5, 6]]), (39, [[6, 1], [6, 2], [6, 3], [6, 4], [7, 2], [7, 3]]), (15, [[6, 5], [6, 6], [7, 4], [7, 5]]), (28, [[4, 8], [5, 7], [5, 8], [6, 7], [6, 8]]), (16, [[7, 1], [8, 1]]), (22, [[7, 6], [8, 4], [8, 5], [8, 6]]), (10, [[8, 2], [8, 3]]), (18, [[7, 7], [7, 8], [8, 7], [8, 8]])]
 
     # 26079 Difficulty:6 Fail
-    cage_constraints = [(8, [[0, 0], [0, 1]]), (25, [[0, 2], [0, 3], [0, 4], [0, 5], [0, 6]]), (12, [[0, 7], [0, 8]]),
-                        (25, [[1, 0], [1, 1], [2, 0], [3, 0]]), (23, [[1, 7], [1, 8], [2, 8], [3, 8]]),
-                        (28, [[1, 2], [2, 1], [2, 2], [3, 2], [4, 2]]), (6, [[1, 3], [2, 3]]), (14, [[1, 4], [2, 4]]),
-                        (6, [[1, 5], [2, 5]]), (23, [[1, 6], [2, 6], [2, 7], [3, 6], [4, 6]]),
-                        (14, [[3, 3], [3, 4], [3, 5]]), (5, [[3, 1], [4, 1]]), (13, [[4, 3], [4, 4], [4, 5]]),
-                        (11, [[3, 7], [4, 7]]), (18, [[4, 0], [5, 0], [6, 0]]), (14, [[4, 8], [5, 8], [6, 8]]),
-                        (13, [[5, 1], [6, 1]]), (14, [[5, 2], [6, 2]]), (16, [[5, 3], [6, 3], [7, 3]]),
-                        (7, [[5, 4], [6, 4]]), (20, [[5, 5], [6, 5], [7, 5]]), (8, [[5, 6], [6, 6]]),
-                        (5, [[5, 7], [6, 7]]), (22, [[7, 1], [7, 2], [8, 2], [8, 3]]),
-                        (22, [[7, 6], [7, 7], [8, 5], [8, 6]]), (10, [[7, 0], [8, 0], [8, 1]]), (8, [[7, 4], [8, 4]]),
-                        (15, [[7, 8], [8, 7], [8, 8]])]
+    # cage_constraints = [(8, [[0, 0], [0, 1]]), (25, [[0, 2], [0, 3], [0, 4], [0, 5], [0, 6]]), (12, [[0, 7], [0, 8]]),
+    #                     (25, [[1, 0], [1, 1], [2, 0], [3, 0]]), (23, [[1, 7], [1, 8], [2, 8], [3, 8]]),
+    #                     (28, [[1, 2], [2, 1], [2, 2], [3, 2], [4, 2]]), (6, [[1, 3], [2, 3]]), (14, [[1, 4], [2, 4]]),
+    #                     (6, [[1, 5], [2, 5]]), (23, [[1, 6], [2, 6], [2, 7], [3, 6], [4, 6]]),
+    #                     (14, [[3, 3], [3, 4], [3, 5]]), (5, [[3, 1], [4, 1]]), (13, [[4, 3], [4, 4], [4, 5]]),
+    #                     (11, [[3, 7], [4, 7]]), (18, [[4, 0], [5, 0], [6, 0]]), (14, [[4, 8], [5, 8], [6, 8]]),
+    #                     (13, [[5, 1], [6, 1]]), (14, [[5, 2], [6, 2]]), (16, [[5, 3], [6, 3], [7, 3]]),
+    #                     (7, [[5, 4], [6, 4]]), (20, [[5, 5], [6, 5], [7, 5]]), (8, [[5, 6], [6, 6]]),
+    #                     (5, [[5, 7], [6, 7]]), (22, [[7, 1], [7, 2], [8, 2], [8, 3]]),
+    #                     (22, [[7, 6], [7, 7], [8, 5], [8, 6]]), (10, [[7, 0], [8, 0], [8, 1]]), (8, [[7, 4], [8, 4]]),
+    #                     (15, [[7, 8], [8, 7], [8, 8]])]
 
     killer_solver = KillerSudokuSolver(cage_constraints=cage_constraints)
 
